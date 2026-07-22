@@ -1,18 +1,28 @@
+# Core Deep Learning
 torch>=2.2.0
+lightning>=2.4.0
 transformers>=4.46.0
 accelerate>=0.34.0
+
+# Parameter Efficient Fine-tuning
 peft>=0.12.0
 bitsandbytes>=0.43.1
 
+# Datasets & Training
 datasets>=2.21.0
 trl>=0.10.1
 
+# Scientific Computing
 numpy>=1.26.4
 pandas>=2.2.2
 scipy>=1.13.1
 
+# Chemistry
 rdkit>=2024.3.5
+
+# Utilities
 PyYAML>=6.0.2
 sentencepiece>=0.2.0
 huggingface-hub>=0.24.6
+tensorboard>=2.17.0
 tqdm>=4.66.5
