@@ -1,6 +1,13 @@
 name: guacamol_10k
 
-max_length: 128
+train:
+  path: data/guacamol/train_10000.csv
+
+validation:
+  path: data/guacamol/val_10000.csv
+
+test:
+  path: data/guacamol/test_10000.csv
 
 smiles_column: smiles
 
@@ -10,11 +17,4 @@ property_columns:
   sas: sas
   tpsa: tpsa
 
-train:
-  path: data/processed/train_10000.csv
-
-validation:
-  path: data/processed/val_10000.csv
-
-test:
-  path: data/processed/test_10000.csv
+max_length: 128
