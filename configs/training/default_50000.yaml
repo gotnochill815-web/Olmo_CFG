@@ -1,0 +1,61 @@
+# ==========================================
+# Hardware
+# ==========================================
+
+accelerator: gpu
+devices: 1
+strategy: auto
+
+precision: bf16-mixed
+
+# ==========================================
+# Training
+# ==========================================
+
+epochs: 3
+
+batch_size: 2
+gradient_accumulation_steps: 8
+
+learning_rate: 0.0001
+weight_decay: 0.01
+
+warmup_steps: 100
+
+max_grad_norm: 1.0
+
+# ==========================================
+# Data
+# ==========================================
+
+num_workers: 2
+dropout_prob: 0.2
+
+conditioning:
+  mode: random
+
+# ==========================================
+# Validation
+# ==========================================
+
+check_val_every_n_epoch: 1
+
+monitor: val/loss
+mode: min
+
+# ==========================================
+# Checkpointing
+# ==========================================
+
+save_top_k: 3
+
+output_dir: checkpoints/lora_cfg_50000
+
+# ==========================================
+# Logging
+# ==========================================
+
+logging_steps: 25
+log_every_n_steps: 25
+
+seed: 42
