@@ -1,11 +1,13 @@
 """
 CFG Data Collator
+
 Supports:
-- all property conditioning
-- single property conditioning
-- pair conditioning
-- triple conditioning
-- random conditioning
+- Classifier-Free Guidance (CFG)
+- All property conditioning
+- Single property conditioning
+- Pair conditioning
+- Triple conditioning
+- Random conditioning
 """
 
 import random
@@ -80,18 +82,10 @@ class CFGDataCollator:
 
         names = list(props.keys())
 
-        #######################################################
-        # ALL
-        #######################################################
-
         if self.conditioning_mode == "all":
             return props
 
-        #######################################################
-        # SINGLE
-        #######################################################
-
-        if self.conditioning_mode == "single":
+        elif self.conditioning_mode == "single":
 
             keep = random.choice(names)
 
@@ -100,11 +94,7 @@ class CFGDataCollator:
                 for k in names
             }
 
-        #######################################################
-        # PAIR
-        #######################################################
-
-        if self.conditioning_mode == "pair":
+        elif self.conditioning_mode == "pair":
 
             keep = random.sample(names, 2)
 
@@ -113,11 +103,7 @@ class CFGDataCollator:
                 for k in names
             }
 
-        #######################################################
-        # TRIPLE
-        #######################################################
-
-        if self.conditioning_mode == "triple":
+        elif self.conditioning_mode == "triple":
 
             keep = random.sample(names, 3)
 
@@ -126,11 +112,7 @@ class CFGDataCollator:
                 for k in names
             }
 
-        #######################################################
-        # RANDOM
-        #######################################################
-
-        if self.conditioning_mode == "random":
+        elif self.conditioning_mode == "random":
 
             mode = random.choice(
                 [
@@ -141,6 +123,7 @@ class CFGDataCollator:
                 ]
             )
 
+            original_mode = self.conditioning_mode
             self.conditioning_mode = mode
 
             selected = self.choose_properties(
@@ -150,13 +133,14 @@ class CFGDataCollator:
                 sas,
             )
 
-            self.conditioning_mode = "random"
+            self.conditioning_mode = original_mode
 
             return selected
 
-        raise ValueError(
-            f"Unknown conditioning mode: {self.conditioning_mode}"
-        )
+        else:
+            raise ValueError(
+                f"Unknown conditioning mode: {self.conditioning_mode}"
+            )
 
     ###########################################################
     # Collator
@@ -168,12 +152,30 @@ class CFGDataCollator:
 
         for sample in batch:
 
-            props = self.choose_properties(
-                sample["qed"],
-                sample["logp"],
-                sample["tpsa"],
-                sample["sas"],
-            )
+            ###################################################
+            # CFG DROPOUT
+            #
+            # With probability dropout_prob remove ALL
+            # conditioning to create unconditional examples.
+            ###################################################
+
+            if random.random() < self.dropout_prob:
+
+                props = {
+                    "qed": None,
+                    "logp": None,
+                    "tpsa": None,
+                    "sas": None,
+                }
+
+            else:
+
+                props = self.choose_properties(
+                    sample["qed"],
+                    sample["logp"],
+                    sample["tpsa"],
+                    sample["sas"],
+                )
 
             prompt = self.build_prompt(
                 smiles=sample["smiles"],
@@ -205,8 +207,10 @@ class CFGDataCollator:
 
                 idx = idx[0].item()
 
+                # Ignore property tokens during loss
                 labels[i, : idx + 1] = -100
 
+            # Ignore padding
             labels[i][tokens["attention_mask"][i] == 0] = -100
 
         tokens["labels"] = labels
