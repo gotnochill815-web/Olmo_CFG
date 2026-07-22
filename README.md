@@ -1,53 +1,60 @@
-# ChemFM CFG: Conditional Molecular Generation with Classifier-Free Guidance
+# ChemFM-CFG: Property-Conditioned Molecular Generation using Classifier-Free Guidance
 
-This repository implements **Classifier-Free Guidance (CFG)** for molecular generation using the **OLMo-7B PubChem** language model.
+Implementation of **Classifier-Free Guidance (CFG)** for property-conditioned molecular generation using the **OLMo-7B molecular language model**.
 
-The project extends a pretrained molecular language model with property-conditioned generation using QLoRA, enabling controlled generation of molecules based on molecular descriptors.
+This project extends the pretrained **OLMo-7B PubChem** model with **QLoRA** fine-tuning and classifier-free guidance to generate molecules conditioned on molecular properties such as **QED, LogP, TPSA, and SAS**.
 
 ---
 
-## Features
+# Features
 
-- Classifier-Free Guidance (CFG) for molecular generation
+- Property-conditioned molecular generation
+- Classifier-Free Guidance (CFG)
 - QLoRA fine-tuning (4-bit quantization)
-- Property conditioning using:
-  - QED
-  - LogP
-  - TPSA
-  - SAS
+- OLMo-7B molecular language model
 - Custom tokenizer with molecular property tokens
-- Modular training and inference pipeline
-- Evaluation utilities
+- Config-based training pipeline
+- Modular codebase
+- Easy experimentation through YAML configuration files
 
 ---
 
-## Repository Structure
+# Repository Structure
 
 ```
-.
+Olmo_CFG/
+│
 ├── configs/
 │   ├── dataset/
+│   │   └── guacamol_10k.yaml
 │   ├── model/
+│   │   └── olmo_7b.yaml
 │   └── training/
+│       └── default_10000.yaml
 │
 ├── data/
-│   ├── guacamol/
-│   │   ├── test.smiles
-│   │   └── valid.smiles
+│   └── guacamol/
+│       ├── train_10000.csv
+│       ├── val_10000.csv
+│       ├── test_10000.csv
+│       ├── valid.smiles
+│       └── test.smiles
 │
 ├── src/
 │   ├── cfg/
 │   ├── dataset/
 │   ├── evaluation/
 │   ├── generation/
-│   ├── inference/
 │   ├── training/
 │   └── utils/
 │
 ├── tokenizer/
+│
 ├── notebooks/
+│
 ├── train.py
 ├── generate.py
+├── requirements.txt
 └── README.md
 ```
 
@@ -70,43 +77,143 @@ pip install -r requirements.txt
 
 ---
 
+# Requirements
+
+- Python 3.10+
+- CUDA-enabled GPU (recommended)
+- PyTorch
+- Transformers
+- PEFT
+- BitsAndBytes
+- Accelerate
+- RDKit
+
+---
+
 # Base Model
 
-The project uses
+This project uses the pretrained model
 
 ```
 harindhar10/OLMo-7B-fsdp-Pubchem-2.5M-1epochs-eos
 ```
 
-which is automatically downloaded through Hugging Face.
+The model will automatically be downloaded from Hugging Face during the first run.
 
-If the repository is gated, login first
+(Optional) Authenticate with Hugging Face for faster downloads:
 
 ```python
 from huggingface_hub import login
 login()
 ```
 
+or
+
+```bash
+export HF_TOKEN=<your_huggingface_token>
+```
+
 ---
 
-# Configuration
+# Dataset
 
-Model configuration
+The repository includes the processed GuacaMol dataset used for the 10k experiment.
+
+```
+data/
+└── guacamol/
+    ├── train_10000.csv
+    ├── val_10000.csv
+    ├── test_10000.csv
+    ├── valid.smiles
+    └── test.smiles
+```
+
+Dataset configuration:
+
+```
+configs/dataset/guacamol_10k.yaml
+```
+
+---
+
+# Configuration Files
+
+The training pipeline is entirely configuration driven.
+
+## Dataset Configuration
+
+```
+configs/dataset/guacamol_10k.yaml
+```
+
+Contains:
+
+- dataset paths
+- smiles column
+- property columns
+- maximum sequence length
+
+---
+
+## Model Configuration
 
 ```
 configs/model/olmo_7b.yaml
 ```
 
-Training configuration
+Contains:
+
+- pretrained model name
+- LoRA configuration
+- quantization settings
+- tokenizer special tokens
+
+---
+
+## Training Configuration
 
 ```
-configs/training/default.yaml
+configs/training/default_10000.yaml
 ```
 
-Dataset configuration
+Contains:
+
+- learning rate
+- batch size
+- gradient accumulation
+- number of epochs
+- checkpoint directory
+- mixed precision settings
+
+---
+
+# Training
+
+Start training using
+
+```bash
+python train.py \
+    --dataset configs/dataset/guacamol_10k.yaml \
+    --model configs/model/olmo_7b.yaml \
+    --training configs/training/default_10000.yaml
+```
+
+The training pipeline performs:
+
+- Load configuration files
+- Load tokenizer
+- Load pretrained OLMo model
+- Apply QLoRA adapters
+- Load dataset
+- Create dataloaders
+- Train the model
+- Save LoRA checkpoints
+
+Checkpoints are saved in
 
 ```
-configs/dataset/
+checkpoints/lora_cfg_10000/
 ```
 
 ---
@@ -126,44 +233,9 @@ model, tokenizer = load_model(model_cfg)
 
 ---
 
-# Training
+# Property Conditioning
 
-Run
-
-```bash
-python train.py
-```
-
-Training uses
-
-- QLoRA
-- 4-bit quantization
-- Gradient checkpointing
-- LoRA adapters
-
-Outputs are saved to
-
-```
-checkpoints/
-```
-
----
-
-# Generation
-
-Generate molecules using
-
-```bash
-python generate.py
-```
-
-The generation pipeline supports Classifier-Free Guidance using molecular property prompts.
-
----
-
-# Property Tokens
-
-The tokenizer is extended with
+The tokenizer includes the following conditioning tokens
 
 ```
 <QED>
@@ -175,46 +247,66 @@ The tokenizer is extended with
 <molstart>
 ```
 
-These tokens enable conditioning on molecular properties during generation.
+These tokens enable conditioning the language model on molecular properties during training and generation.
 
 ---
 
-# Dataset
+# Generation
 
-This repository does **not** include the full training dataset because of GitHub file size limits.
+After training, generate molecules using
 
-Training data should be prepared separately.
-
-The repository contains
-
+```bash
+python generate.py
 ```
-data/
-├── guacamol/
-│   ├── valid.smiles
-│   └── test.smiles
-```
+
+Generation supports property-conditioned molecular generation using Classifier-Free Guidance.
 
 ---
 
 # Evaluation
 
-Evaluation utilities are available under
+Evaluation utilities are located in
 
 ```
 src/evaluation/
 ```
 
-Metrics include molecular validity and property evaluation.
+Typical evaluation metrics include:
+
+- Validity
+- Uniqueness
+- Novelty
+- Property distribution
+- Molecular quality metrics
 
 ---
 
-# Requirements
+# Example Workflow
 
-- Python 3.10+
-- PyTorch
-- CUDA GPU (recommended)
-- Transformers
-- PEFT
-- BitsAndBytes
+```text
+Clone Repository
+        │
+        ▼
+Install Dependencies
+        │
+        ▼
+Download Base Model
+        │
+        ▼
+Load Dataset
+        │
+        ▼
+Apply LoRA
+        │
+        ▼
+Train Model
+        │
+        ▼
+Save Checkpoints
+        │
+        ▼
+Generate Molecules
+```
 
 ---
+
