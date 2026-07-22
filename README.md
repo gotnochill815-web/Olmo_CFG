@@ -1,84 +1,66 @@
-# ChemFM_CFG
+# ChemFM CFG: Conditional Molecular Generation with Classifier-Free Guidance
 
-Classifier-Free Guidance (CFG) Fine-Tuning for Conditional Molecular Generation using OLMo-7B.
+This repository implements **Classifier-Free Guidance (CFG)** for molecular generation using the **OLMo-7B PubChem** language model.
 
-This project extends the ChemFM framework by enabling conditional molecular generation using molecular properties through prompt-based conditioning and LoRA fine-tuning.
-
----
-
-# Overview
-
-ChemFM_CFG enables conditional molecular generation by conditioning the language model on molecular properties instead of generating molecules unconditionally.
-
-Supported molecular properties:
-
-- QED (Quantitative Estimate of Drug-likeness)
-- LogP
-- TPSA (Topological Polar Surface Area)
-- SAS (Synthetic Accessibility Score)
-
-The project is built on top of the **OLMo-7B PubChem** checkpoint and fine-tunes the model using **LoRA** with **4-bit quantization** for efficient training.
+The project extends a pretrained molecular language model with property-conditioned generation using QLoRA, enabling controlled generation of molecules based on molecular descriptors.
 
 ---
 
-# Features
+## Features
 
-- LoRA Fine-Tuning
-- 4-bit Quantization (BitsAndBytes)
-- Gradient Checkpointing
-- FP16 Mixed Precision Training
-- Prompt-based Molecular Property Conditioning
-- Multi-property Conditioning
-- HuggingFace Trainer Pipeline
-- Config-driven Training
+- Classifier-Free Guidance (CFG) for molecular generation
+- QLoRA fine-tuning (4-bit quantization)
+- Property conditioning using:
+  - QED
+  - LogP
+  - TPSA
+  - SAS
+- Custom tokenizer with molecular property tokens
+- Modular training and inference pipeline
+- Evaluation utilities
 
 ---
 
-# Repository Structure
+## Repository Structure
 
 ```
-ChemFM_CFG/
-│
+.
 ├── configs/
 │   ├── dataset/
 │   ├── model/
 │   └── training/
 │
 ├── data/
-│   ├── raw/
-│   └── processed/
+│   ├── guacamol/
+│   │   ├── test.smiles
+│   │   └── valid.smiles
 │
 ├── src/
 │   ├── cfg/
 │   ├── dataset/
-│   ├── training/
+│   ├── evaluation/
 │   ├── generation/
+│   ├── inference/
+│   ├── training/
 │   └── utils/
 │
 ├── tokenizer/
-├── checkpoints/
-├── outputs/
-│
+├── notebooks/
 ├── train.py
 ├── generate.py
-├── benchmark_cfg.py
-├── requirements.txt
 └── README.md
 ```
 
 ---
 
-# Requirements
+# Installation
 
-Recommended Environment
+Clone the repository
 
-- Python 3.11+
-- CUDA GPU
-- PyTorch
-- Transformers
-- PEFT
-- BitsAndBytes
-- RDKit
+```bash
+git clone https://github.com/gotnochill815-web/Olmo_CFG.git
+cd Olmo_CFG
+```
 
 Install dependencies
 
@@ -88,103 +70,100 @@ pip install -r requirements.txt
 
 ---
 
-# Hugging Face Authentication
+# Base Model
 
-The base model is downloaded from Hugging Face.
-
-Login using
-
-```bash
-huggingface-cli login
-```
-
-or
-
-```bash
-export HF_TOKEN=<your_token>
-```
-
-If no token is provided, downloads will still work but may be slower due to anonymous rate limits.
-
----
-
-# Dataset
-
-Expected directory structure
-
-```
-data/
-└── processed/
-    ├── train_10000.csv
-    ├── val_10000.csv
-    └── test_10000.csv
-```
-
-Each CSV should contain the following columns
-
-| Column | Description |
-|---------|-------------|
-| smiles | Molecular SMILES |
-| qed | QED |
-| logp | LogP |
-| tpsa | TPSA |
-| sas | SAS |
-
-Dataset configuration
-
-```
-configs/dataset/guacamol_10k.yaml
-```
-
-Example
-
-```yaml
-name: guacamol_10k
-
-max_length: 128
-
-smiles_column: smiles
-
-property_columns:
-  qed: qed
-  logp: logp
-  tpsa: tpsa
-  sas: sas
-
-train:
-  path: data/processed/train_10000.csv
-
-validation:
-  path: data/processed/val_10000.csv
-
-test:
-  path: data/processed/test_10000.csv
-```
-
----
-
-# Model Configuration
-
-Configuration file
-
-```
-configs/model/olmo_7b.yaml
-```
-
-Current base model
+The project uses
 
 ```
 harindhar10/OLMo-7B-fsdp-Pubchem-2.5M-1epochs-eos
 ```
 
-Current configuration
+which is automatically downloaded through Hugging Face.
 
-- LoRA Enabled
-- 4-bit Quantization
-- Gradient Checkpointing
-- Automatic Device Mapping
+If the repository is gated, login first
 
-Special tokens
+```python
+from huggingface_hub import login
+login()
+```
+
+---
+
+# Configuration
+
+Model configuration
+
+```
+configs/model/olmo_7b.yaml
+```
+
+Training configuration
+
+```
+configs/training/default.yaml
+```
+
+Dataset configuration
+
+```
+configs/dataset/
+```
+
+---
+
+# Loading the Model
+
+```python
+import yaml
+
+from src.training.load_model import load_model
+
+with open("configs/model/olmo_7b.yaml") as f:
+    model_cfg = yaml.safe_load(f)
+
+model, tokenizer = load_model(model_cfg)
+```
+
+---
+
+# Training
+
+Run
+
+```bash
+python train.py
+```
+
+Training uses
+
+- QLoRA
+- 4-bit quantization
+- Gradient checkpointing
+- LoRA adapters
+
+Outputs are saved to
+
+```
+checkpoints/
+```
+
+---
+
+# Generation
+
+Generate molecules using
+
+```bash
+python generate.py
+```
+
+The generation pipeline supports Classifier-Free Guidance using molecular property prompts.
+
+---
+
+# Property Tokens
+
+The tokenizer is extended with
 
 ```
 <QED>
@@ -196,211 +175,46 @@ Special tokens
 <molstart>
 ```
 
+These tokens enable conditioning on molecular properties during generation.
+
 ---
 
-# Training Configuration
+# Dataset
 
-Training configuration
+This repository does **not** include the full training dataset because of GitHub file size limits.
+
+Training data should be prepared separately.
+
+The repository contains
 
 ```
-configs/training/default_10000.yaml
-```
-
-Example
-
-```yaml
-batch_size: 4
-
-gradient_accumulation_steps: 4
-
-epochs: 3
-
-learning_rate: 1e-4
-
-warmup_steps: 15
-
-weight_decay: 0.01
-
-fp16: true
-
-bf16: false
-
-conditioning:
-    mode: random
+data/
+├── guacamol/
+│   ├── valid.smiles
+│   └── test.smiles
 ```
 
 ---
 
-# Conditioning Modes
+# Evaluation
 
-The training pipeline supports multiple conditioning strategies.
-
-Available modes
-
-- all
-- single
-- pair
-- triple
-- random
-
-Current training uses
-
-```yaml
-conditioning:
-    mode: random
-```
-
-For every training sample, one conditioning strategy is randomly selected.
-
-Examples include
-
-### Single Property
+Evaluation utilities are available under
 
 ```
-<pstart>
-<QED> 0.82
-<molstart>
-CCO...
+src/evaluation/
 ```
 
-### Pair Conditioning
-
-```
-<pstart>
-<QED> 0.82
-<LOGP> 2.45
-<molstart>
-CCO...
-```
-
-### Triple Conditioning
-
-```
-<pstart>
-<QED> 0.82
-<LOGP> 2.45
-<TPSA> 78.3
-<molstart>
-CCO...
-```
-
-### All Properties
-
-```
-<pstart>
-<QED> 0.82
-<LOGP> 2.45
-<TPSA> 78.3
-<SAS> 2.1
-<molstart>
-CCO...
-```
-
-This allows the model to learn flexible molecular conditioning using different combinations of properties.
+Metrics include molecular validity and property evaluation.
 
 ---
 
-# Training
+# Requirements
 
-Start training using
-
-```bash
-python train.py \
-    --dataset configs/dataset/guacamol_10k.yaml \
-    --model configs/model/olmo_7b.yaml \
-    --training configs/training/default_10000.yaml
-```
-
----
-
-# Training Output
-
-Fine-tuned LoRA checkpoints are saved to
-
-```
-checkpoints/lora_cfg_10000/
-```
-
----
-
-# Verified Training Pipeline
-
-The complete training pipeline has been verified successfully on a fresh Google Colab environment.
-
-Verified components
-
-- Configuration loading
-- Dataset loading
-- Tokenizer loading
-- OLMo model loading
-- LoRA initialization
-- 4-bit quantization
-- Data Collator
-- HuggingFace Trainer
-- Checkpoint Saving
-
-Example output
-
-```
-Train samples : 8000
-Valid samples : 1000
-
-trainable params: 19,988,480
-all params: 6,907,944,960
-trainable%: 0.2894
-
-Training Complete!
-```
-
----
-
-# Notes
-
-Training updates only the LoRA adapter weights.
-
-The full OLMo-7B model remains frozen during fine-tuning.
-
-Training uses
-
-- LoRA
-- FP16 Mixed Precision
-- Gradient Checkpointing
-- 4-bit Quantization
-- Prompt-based Molecular Property Conditioning
-
----
-
-# Current Status
-
- Training pipeline verified
-
-- Configuration loading
-- Dataset loading
-- Model loading
-- LoRA fine-tuning
-- Checkpoint saving
-
-Generation utilities are included in the repository but are still under development and were not part of the verified training workflow.
-
----
-
-# Citation
-
-If you use this project, please cite the original ChemFM framework and the OLMo PubChem checkpoint used for fine-tuning.
-
----
-
-# Acknowledgements
-
-This project builds upon:
-
-- ChemFM
-- OLMo
-- Hugging Face Transformers
+- Python 3.10+
+- PyTorch
+- CUDA GPU (recommended)
+- Transformers
 - PEFT
 - BitsAndBytes
-- RDKit
-
-Special thanks to the original authors and contributors of these open-source projects.
 
 ---
