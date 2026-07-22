@@ -1,5 +1,6 @@
 """
 Model loading utilities.
+Compatible with PyTorch Lightning + DDP + QLoRA.
 """
 
 import torch
@@ -24,9 +25,9 @@ def load_model(model_cfg):
 
     model_name = model_cfg["model_name"]
 
-    # --------------------------------------------------
+    ############################################################
     # Tokenizer
-    # --------------------------------------------------
+    ############################################################
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_name,
@@ -44,50 +45,66 @@ def load_model(model_cfg):
 
     tokenizer.padding_side = "right"
 
-    # --------------------------------------------------
-    # 4-bit Quantization
-    # --------------------------------------------------
+    ############################################################
+    # Quantization
+    ############################################################
 
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=model_cfg["load_in_4bit"],
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.float16,
-    )
+    quantization_config = None
 
-    # --------------------------------------------------
-    # Load Base Model
-    # --------------------------------------------------
+    if model_cfg.get("load_in_4bit", False):
+
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+
+    ############################################################
+    # Load Model
+    ############################################################
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        device_map=model_cfg["device_map"],
-        quantization_config=bnb_config,
+        quantization_config=quantization_config,
         trust_remote_code=True,
+        torch_dtype=torch.bfloat16,
+        device_map=None,   # IMPORTANT for Lightning DDP
     )
 
-    # Add new special token embeddings
+    ############################################################
+    # Resize Embeddings
+    ############################################################
+
     model.resize_token_embeddings(len(tokenizer))
 
-    # Disable KV cache during training
+    ############################################################
+    # Disable KV cache
+    ############################################################
+
     model.config.use_cache = False
 
-    # --------------------------------------------------
-    # Gradient Checkpointing
-    # --------------------------------------------------
+    ############################################################
+    # Gradient checkpointing
+    ############################################################
 
-    if model_cfg["gradient_checkpointing"]:
+    if model_cfg.get("gradient_checkpointing", False):
+
         model.gradient_checkpointing_enable()
 
-    # Prepare model for QLoRA
-    model = prepare_model_for_kbit_training(model)
+    ############################################################
+    # Prepare for QLoRA
+    ############################################################
 
-    # Enable gradients on input embeddings
+    if model_cfg.get("load_in_4bit", False):
+
+        model = prepare_model_for_kbit_training(model)
+
     model.enable_input_require_grads()
 
-    # --------------------------------------------------
-    # LoRA Configuration
-    # --------------------------------------------------
+    ############################################################
+    # LoRA
+    ############################################################
 
     lora_cfg = LoraConfig(
         r=model_cfg["lora"]["r"],
@@ -106,7 +123,10 @@ def load_model(model_cfg):
         ],
     )
 
-    model = get_peft_model(model, lora_cfg)
+    model = get_peft_model(
+        model,
+        lora_cfg,
+    )
 
     model.print_trainable_parameters()
 
