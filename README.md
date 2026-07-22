@@ -1,27 +1,32 @@
 # ChemFM Classifier-Free Guidance (CFG)
 
-PyTorch Lightning implementation of **Classifier-Free Guidance (CFG)** fine-tuning for **ChemFM (OLMo-7B)** on molecular property-conditioned generation.
+PyTorch Lightning implementation of **Classifier-Free Guidance (CFG)** fine-tuning for **ChemFM (OLMo-7B)** using **QLoRA** for controllable molecular generation.
 
-This project fine-tunes the ChemFM foundation model using LoRA and 4-bit quantization for controllable molecule generation conditioned on molecular properties such as:
+This project reproduces the training methodology of Classifier-Free Guidance by combining:
 
-- QED
-- LogP
-- TPSA
-- SAS
+- Property-conditioned molecule generation
+- Random condition dropout (CFG training)
+- LoRA fine-tuning
+- 4-bit QLoRA
+- PyTorch Lightning
+- Mixed precision training
 
 ---
 
 # Features
 
-- PyTorch Lightning training pipeline
-- LoRA fine-tuning (PEFT)
-- 4-bit QLoRA (BitsAndBytes)
-- Mixed Precision (BF16/FP16)
-- Property-conditioned generation
-- Random CFG dropout
-- Modular configuration using YAML
-- TensorBoard logging
-- Model checkpointing
+- ✅ PyTorch Lightning training pipeline
+- ✅ True Classifier-Free Guidance (CFG) training
+- ✅ Random condition dropout
+- ✅ Multi-property conditioning
+- ✅ Single / Pair / Triple property conditioning
+- ✅ QLoRA (4-bit NF4)
+- ✅ LoRA fine-tuning
+- ✅ Gradient checkpointing
+- ✅ Mixed precision (BF16 / FP16)
+- ✅ TensorBoard logging
+- ✅ Automatic checkpointing
+- ✅ Modular YAML configuration
 
 ---
 
@@ -49,25 +54,26 @@ Olmo_CFG/
 │       ├── test_10000.csv
 │       ├── train_50000.csv
 │       ├── val_50000.csv
-│       ├── test_50000.csv
-│       ├── test.smiles
-│       └── valid.smiles
+│       └── test_50000.csv
 │
 ├── src/
+│   ├── dataset/
+│   │   └── dataset.py
+│   │
 │   ├── lightning/
 │   │   ├── datamodule.py
 │   │   └── lightning_module.py
 │   │
 │   ├── training/
 │   │   ├── collator.py
-│   │   ├── dataset.py
-│   │   ├── load_dataset.py
 │   │   ├── load_model.py
 │   │   └── utils.py
 │   │
-│   └── ...
+│   └── utils/
+│       └── config.py
 │
 ├── train.py
+├── requirements.txt
 └── README.md
 ```
 
@@ -91,23 +97,29 @@ pip install -r requirements.txt
 
 ---
 
-# Dataset
+# Dataset Format
 
-Each CSV must contain
+Each CSV should contain the following columns.
 
 | Column | Description |
-|----------|-------------|
-| smiles | Molecular SMILES |
-| qed | QED score |
-| logp | LogP |
-| sas | Synthetic Accessibility Score |
+|---------|-------------|
+| smiles | Canonical SMILES |
+| qed | Quantitative Estimate of Drug-likeness |
+| logp | Partition Coefficient |
 | tpsa | Topological Polar Surface Area |
+| sas | Synthetic Accessibility Score |
+
+Example
+
+| smiles | qed | logp | tpsa | sas |
+|--------|------|------|------|------|
+| CCO | 0.71 | 1.42 | 20.2 | 2.31 |
 
 ---
 
 # Model
 
-Current backbone
+Backbone
 
 ```
 harindhar10/OLMo-7B-fsdp-Pubchem-2.5M-1epochs-eos
@@ -116,8 +128,84 @@ harindhar10/OLMo-7B-fsdp-Pubchem-2.5M-1epochs-eos
 Training uses
 
 - LoRA
-- QLoRA (4-bit)
+- QLoRA (4-bit NF4)
 - Gradient Checkpointing
+- AdamW
+- Cosine LR Scheduler
+
+---
+
+# Classifier-Free Guidance Training
+
+Unlike standard conditional language modeling, this project performs **Classifier-Free Guidance (CFG)** training by randomly removing all conditioning information during training.
+
+For every batch:
+
+- **(1 − dropout_prob)** → Conditional training
+- **dropout_prob** → Unconditional training
+
+Example
+
+Conditional sample
+
+```
+<pstart>
+
+<QED> 0.82
+<LOGP> 2.11
+<TPSA> 41.5
+<SAS> 2.34
+
+<molstart>
+CCO...
+```
+
+Unconditional sample
+
+```
+<pstart>
+
+<molstart>
+CCO...
+```
+
+This allows the model to learn both conditional and unconditional molecule generation, enabling CFG inference after training.
+
+---
+
+# Supported Conditioning Modes
+
+The data collator supports multiple conditioning strategies.
+
+### All properties
+
+```
+QED
+LOGP
+TPSA
+SAS
+```
+
+### Single property
+
+Randomly keeps one property.
+
+### Pair conditioning
+
+Randomly keeps two properties.
+
+### Triple conditioning
+
+Randomly keeps three properties.
+
+### Random conditioning
+
+Randomly chooses one of:
+
+- Single
+- Pair
+- Triple
+- All
 
 ---
 
@@ -145,28 +233,6 @@ python train.py \
 
 ---
 
-# Configuration
-
-Dataset configuration
-
-```
-configs/dataset/
-```
-
-Training configuration
-
-```
-configs/training/
-```
-
-Model configuration
-
-```
-configs/model/
-```
-
----
-
 # Training Pipeline
 
 ```
@@ -178,17 +244,20 @@ Dataset Loader
       ▼
 CFG Data Collator
       │
+      ├── Random Property Conditioning
+      └── Classifier-Free Dropout
+      │
+      ▼
+Tokenizer
+      │
       ▼
 Lightning DataModule
       │
       ▼
-Lightning Module
+OLMo-7B + LoRA
       │
       ▼
-LoRA OLMo-7B
-      │
-      ▼
-Optimizer
+AdamW
       │
       ▼
 Cosine Scheduler
@@ -199,63 +268,53 @@ PyTorch Lightning Trainer
 
 ---
 
-# Lightning Features
+# Logging
 
-Implemented
+TensorBoard
 
-- LightningModule
-- LightningDataModule
-- Automatic Mixed Precision
-- Gradient Accumulation
-- Distributed Training
-- Model Checkpointing
-- TensorBoard Logging
-- Validation Loop
+```bash
+tensorboard --logdir logs
+```
 
 ---
 
 # Checkpoints
 
-Saved automatically to
-
-```
-checkpoints/
-```
+Best checkpoints are automatically saved during training.
 
 Example
 
 ```
 checkpoints/
-    lora_cfg_10000/
 
-checkpoints/
-    lora_cfg_50000/
+    last.ckpt
+
+logs/
+
+    cfg/
 ```
 
 ---
 
-# Logging
+# Configuration
 
-TensorBoard logs
+Training configuration
 
-```bash
-tensorboard --logdir lightning_logs
+```
+configs/training/
 ```
 
----
+Dataset configuration
 
-# Supported Training Modes
+```
+configs/dataset/
+```
 
-Current
+Model configuration
 
-- 10k GuacaMol
-- 50k GuacaMol
-
-Planned
-
-- Full GuacaMol
-- ChEMBL
-- MOSES
+```
+configs/model/
+```
 
 ---
 
@@ -270,3 +329,19 @@ Planned
 - RDKit
 - pandas
 - numpy
+
+---
+
+# Current Status
+
+### Implemented
+
+- PyTorch Lightning training
+- QLoRA fine-tuning
+- LoRA adapters
+- Gradient checkpointing
+- Random property conditioning
+- True Classifier-Free Guidance training
+- Multi-property conditioning
+- Automatic checkpointing
+- TensorBoard logging
