@@ -1,0 +1,21 @@
+model_name: harindhar10/OLMo-7B-fsdp-Pubchem-2.5M-1epochs-eos
+
+load_in_4bit: true
+
+device_map: auto
+
+gradient_checkpointing: true
+
+special_tokens:
+  - "<QED>"
+  - "<LOGP>"
+  - "<TPSA>"
+  - "<SAS>"
+  - "<NULL>"
+  - "<pstart>"
+  - "<molstart>"
+
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.05

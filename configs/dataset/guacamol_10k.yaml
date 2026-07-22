@@ -1,0 +1,20 @@
+name: guacamol_10k
+
+max_length: 128
+
+smiles_column: smiles
+
+property_columns:
+  qed: qed
+  logp: logp
+  sas: sas
+  tpsa: tpsa
+
+train:
+  path: data/processed/train_10000.csv
+
+validation:
+  path: data/processed/val_10000.csv
+
+test:
+  path: data/processed/test_10000.csv

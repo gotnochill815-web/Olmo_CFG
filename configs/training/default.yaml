@@ -1,0 +1,24 @@
+output_dir: /content/drive/MyDrive/ChemFM_CFG/checkpoints/lora_cfg_10000
+
+batch_size: 1
+gradient_accumulation_steps: 16
+
+epochs: 1
+
+learning_rate: 1e-4
+weight_decay: 0.01
+
+warmup_steps: 15
+
+logging_steps: 10
+
+save_steps: 100
+save_total_limit: 3
+
+fp16: true
+bf16: false
+
+dropout_prob: 0.2
+
+conditioning:
+  mode: random

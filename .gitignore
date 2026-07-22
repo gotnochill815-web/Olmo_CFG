@@ -1,0 +1,11 @@
+checkpoints/
+outputs/
+lora_cfg_10k/
+
+data/processed/
+data/guacamol/train.smiles
+
+*.safetensors
+*.pt
+*.pth
+*.bin
