@@ -30,7 +30,7 @@ class CFGDataModule(L.LightningDataModule):
         max_length=512,
         conditioning_mode="random",
         pin_memory=True,
-        persistent_workers=True,
+        persistent_workers=False ,
     ):
         super().__init__()
 

@@ -4,6 +4,7 @@ Main training script using PyTorch Lightning.
 
 import argparse
 import os
+import shutil  
 from pprint import pprint
 
 import lightning as L
@@ -182,7 +183,8 @@ def main():
             monitor="val/loss",
             mode="min",
             save_top_k=3,
-            filename="best-{epoch}-{val_loss:.4f}",
+            save_last=True,
+            filename="best-{epoch:02d}",
         ),
 
         LearningRateMonitor(
@@ -214,10 +216,9 @@ def main():
             "auto",
         ),
 
-        precision=(
-            "bf16-mixed"
-            if training_cfg.get("bf16", False)
-            else "16-mixed"
+        precision=training_cfg.get(
+            "precision",
+            "bf16-mixed",
         ),
 
         max_epochs=training_cfg["epochs"],
@@ -256,28 +257,42 @@ def main():
     )
 
     ###########################################################
-    # Save
+    # Save Everything
     ###########################################################
 
     save_dir = training_cfg["output_dir"]
+    os.makedirs(save_dir, exist_ok=True)
 
-    os.makedirs(
-        save_dir,
-        exist_ok=True,
-    )
+    print("=" * 80)
+    print("Saving Everything...")
+    print("=" * 80)
 
+    # 1. Save LoRA adapter
+    adapter_dir = os.path.join(save_dir, "adapter")
+    model.save_pretrained(adapter_dir)
+
+    # 2. Save tokenizer
+    tokenizer_dir = os.path.join(save_dir, "tokenizer")
+    tokenizer.save_pretrained(tokenizer_dir)
+
+    # 3. Save Lightning checkpoint
     trainer.save_checkpoint(
-        os.path.join(
-            save_dir,
-            "last.ckpt",
-        )
+        os.path.join(save_dir, "last.ckpt")
     )
 
-    tokenizer.save_pretrained(save_dir)
+    # 4. Save model config
+    config_dir = os.path.join(save_dir, "config")
+    model.config.save_pretrained(config_dir)
+
+    # 5. Save YAML configs
+    shutil.copy(args.training, os.path.join(save_dir, "training.yaml"))
+    shutil.copy(args.model, os.path.join(save_dir, "model.yaml"))
+    shutil.copy(args.dataset, os.path.join(save_dir, "dataset.yaml"))
 
     print("=" * 80)
     print("Training Complete")
     print("=" * 80)
+    print(f"Everything saved to: {save_dir}")
 
 
 if __name__ == "__main__":
