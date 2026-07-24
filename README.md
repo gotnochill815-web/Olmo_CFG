@@ -51,7 +51,7 @@ Built using **PyTorch Lightning**, **Hugging Face Transformers**, **PEFT**, and 
 Clone the repository
 
 ```bash
-git clone https://github.com/<your_username>/Olmo_CFG.git
+git clone https://github.com/gotnochill815-web/Olmo_CFG.git
 
 cd Olmo_CFG
 ```
