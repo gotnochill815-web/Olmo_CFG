@@ -1,69 +1,43 @@
-# ChemFM Classifier-Free Guidance (CFG)
+# OLMo-7B Classifier-Free Guided Conditional Molecular Generation
 
-PyTorch Lightning implementation of **Classifier-Free Guidance (CFG)** fine-tuning for **ChemFM (OLMo-7B)** using **QLoRA** for controllable molecular generation.
+This repository implements **parameter-efficient fine-tuning (QLoRA)** of **OLMo-7B** for **conditional molecular generation** using **Classifier-Free Guidance (CFG)**. The model learns to generate molecular SMILES conditioned on molecular properties while retaining unconditional generation capability through random conditioning dropout.
 
-This repository reproduces classifier-free guidance training for molecular language models by combining property-conditioned generation with random condition dropout, enabling both conditional and unconditional molecule generation from a single model.
+Built using **PyTorch Lightning**, **Hugging Face Transformers**, **PEFT**, and **BitsAndBytes**, the project supports efficient fine-tuning on modern GPUs and is compatible with both single-GPU and Distributed Data Parallel (DDP) training.
 
 ---
 
 # Features
 
-- PyTorch Lightning training pipeline
-- Classifier-Free Guidance (CFG) training
-- Random condition dropout
-- Property-conditioned molecular generation
-- Single, pair, triple, and all-property conditioning
-- QLoRA (4-bit NF4)
-- LoRA fine-tuning
-- Gradient checkpointing
-- Mixed precision training (BF16 / FP16)
-- TensorBoard logging
+- OLMo-7B fine-tuning with QLoRA (4-bit)
+- Classifier-Free Guidance (CFG)
+- Conditional molecular generation
+- Random conditioning dropout
+- Mixed Precision (BF16)
+- Gradient Accumulation
+- LoRA adapters
 - Automatic checkpointing
-- YAML-based configuration
+- TensorBoard logging
+- Distributed Data Parallel (DDP) compatible
 
 ---
 
-# Project Structure
+# Repository Structure
 
 ```text
-Olmo_CFG/
-│
+.
 ├── configs/
 │   ├── dataset/
-│   │   ├── guacamol_10k.yaml
-│   │   └── guacamol_50000.yaml
-│   │
 │   ├── model/
-│   │   └── olmo_7b.yaml
-│   │
 │   └── training/
-│       ├── default_10000.yaml
-│       └── default_50000.yaml
 │
-├── data/
-│   └── guacamol/
-│       ├── train_10000.csv
-│       ├── val_10000.csv
-│       ├── test_10000.csv
-│       ├── train_50000.csv
-│       ├── val_50000.csv
-│       └── test_50000.csv
+├── lightning/
+│   ├── datamodule.py
+│   └── lightning_module.py
 │
-├── src/
-│   ├── dataset/
-│   │   └── dataset.py
-│   │
-│   ├── lightning/
-│   │   ├── datamodule.py
-│   │   └── lightning_module.py
-│   │
-│   ├── training/
-│   │   ├── collator.py
-│   │   ├── load_model.py
-│   │   └── utils.py
-│   │
-│   └── utils/
-│       └── config.py
+├── models/
+│   └── load_model.py
+│
+├── utils/
 │
 ├── train.py
 ├── requirements.txt
@@ -74,34 +48,33 @@ Olmo_CFG/
 
 # Installation
 
-## Step 1: Clone the repository
+Clone the repository
 
 ```bash
-git clone https://github.com/gotnochill815-web/Olmo_CFG.git
+git clone https://github.com/<your_username>/Olmo_CFG.git
+
 cd Olmo_CFG
 ```
 
----
-
-## Step 2: Create a virtual environment (Recommended)
-
-Linux/macOS
+Create a virtual environment
 
 ```bash
 python -m venv venv
+```
+
+Linux
+
+```bash
 source venv/bin/activate
 ```
 
 Windows
 
 ```bash
-python -m venv venv
 venv\Scripts\activate
 ```
 
----
-
-## Step 3: Install dependencies
+Install dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -109,142 +82,47 @@ pip install -r requirements.txt
 
 ---
 
-# Dataset
-
-The project expects processed GuacaMol CSV files.
-
-Each CSV must contain the following columns.
-
-| Column | Description |
-|---------|-------------|
-| smiles | Canonical SMILES |
-| qed | Quantitative Estimate of Drug-likeness |
-| logp | Partition Coefficient |
-| tpsa | Topological Polar Surface Area |
-| sas | Synthetic Accessibility Score |
-
-Example
-
-| smiles | qed | logp | tpsa | sas |
-|--------|-----|------|------|-----|
-| CCO | 0.71 | 1.42 | 20.2 | 2.31 |
-
-Place the dataset inside
-
-```text
-data/
-└── guacamol/
-    ├── train_10000.csv
-    ├── val_10000.csv
-    ├── test_10000.csv
-    ├── train_50000.csv
-    ├── val_50000.csv
-    └── test_50000.csv
-```
-
----
-
-# Model
-
-Base model
+# Base Model
 
 ```
 harindhar10/OLMo-7B-fsdp-Pubchem-2.5M-1epochs-eos
 ```
 
-Training uses
-
-- QLoRA (4-bit NF4)
-- LoRA
-- AdamW
-- Cosine Learning Rate Scheduler
-- Gradient Checkpointing
-- Mixed Precision Training
-
 ---
 
-# Configuration
+# Training Configuration
 
-The repository uses YAML configuration files.
+Example configuration
 
-## Dataset
+```yaml
+accelerator: gpu
 
-```
-configs/dataset/
-```
+devices: 1
 
-## Model
+strategy: auto
 
-```
-configs/model/
-```
+precision: bf16-mixed
 
-## Training
+batch_size: 2
 
-```
-configs/training/
+gradient_accumulation_steps: 8
+
+epochs: 3
+
+learning_rate: 1e-4
+
+weight_decay: 0.01
+
+warmup_steps: 100
+
+max_grad_norm: 1.0
 ```
 
 ---
 
-# How to Run
+# Running Training
 
-## Step 1
-
-Verify the dataset configuration.
-
-Example
-
-```
-configs/dataset/guacamol_10k.yaml
-```
-
-contains the correct dataset paths.
-
----
-
-## Step 2
-
-Verify the model configuration.
-
-```
-configs/model/olmo_7b.yaml
-```
-
----
-
-## Step 3
-
-Verify the training configuration.
-
-```
-configs/training/default_10000.yaml
-```
-
-or
-
-```
-configs/training/default_50000.yaml
-```
-
----
-
-## Step 4
-
-Train on the 10k dataset.
-
-```bash
-python train.py \
-    --dataset configs/dataset/guacamol_10k.yaml \
-    --model configs/model/olmo_7b.yaml \
-    --training configs/training/default_10000.yaml
-```
-
----
-
-## Step 5
-
-Train on the 50k dataset.
+## Single GPU
 
 ```bash
 python train.py \
@@ -255,156 +133,67 @@ python train.py \
 
 ---
 
-## Step 6
+# Multi-GPU Training (DDP)
 
-Monitor training.
+This project is compatible with **PyTorch Lightning Distributed Data Parallel (DDP)**.
+
+Update your training configuration:
+
+```yaml
+accelerator: gpu
+
+devices: 2
+
+strategy: ddp
+```
+
+Launch training using **torchrun**:
 
 ```bash
-tensorboard --logdir logs
+torchrun --nproc_per_node=2 train.py \
+    --dataset configs/dataset/guacamol_50000.yaml \
+    --model configs/model/olmo_7b.yaml \
+    --training configs/training/default_50000.yaml
 ```
 
-Open
+For four GPUs:
 
-```
-http://localhost:6006
-```
-
-to visualize
-
-- Training loss
-- Validation loss
-- Learning rate
-- Checkpoints
-
----
-
-## Step 7
-
-After training completes, the repository automatically saves
-
-```
-checkpoints/
-    last.ckpt
-```
-
-TensorBoard logs are stored in
-
-```
-logs/
-    cfg/
+```bash
+torchrun --nproc_per_node=4 train.py \
+    --dataset configs/dataset/guacamol_50000.yaml \
+    --model configs/model/olmo_7b.yaml \
+    --training configs/training/default_50000.yaml
 ```
 
 ---
 
-# Classifier-Free Guidance Training
+# Verifying Multi-GPU Training
 
-Unlike standard conditional language modeling, this implementation performs **Classifier-Free Guidance (CFG)** training.
+Verify that the system detects multiple GPUs.
 
-During training, molecular property conditioning is randomly removed with a fixed probability.
-
-```
-(1 − dropout_prob)
-        ↓
-Conditional Training
-
-dropout_prob
-        ↓
-Unconditional Training
+```bash
+nvidia-smi -L
 ```
 
-Conditional example
+Example
 
 ```text
-<pstart>
-
-<QED> 0.82
-<LOGP> 2.11
-<TPSA> 41.5
-<SAS> 2.34
-
-<molstart>
-CCO...
+GPU 0: NVIDIA A100
+GPU 1: NVIDIA A100
 ```
 
-Unconditional example
+Monitor GPU utilization while training.
 
-```text
-<pstart>
-
-<molstart>
-CCO...
+```bash
+watch -n 1 nvidia-smi
 ```
 
-This allows the model to learn both conditional and unconditional molecule generation, enabling CFG during inference.
+A successful DDP run should show:
 
----
-
-# Conditioning Modes
-
-The data collator supports multiple conditioning strategies.
-
-## All-property conditioning
-
-- QED
-- LOGP
-- TPSA
-- SAS
-
-## Single-property conditioning
-
-Randomly keeps one property.
-
-## Pair conditioning
-
-Randomly keeps two properties.
-
-## Triple conditioning
-
-Randomly keeps three properties.
-
-## Random conditioning
-
-Randomly selects one of
-
-- Single
-- Pair
-- Triple
-- All
-
----
-
-# Training Pipeline
-
-```text
-CSV Dataset
-      │
-      ▼
-Dataset Loader
-      │
-      ▼
-CFG Data Collator
-      │
-      ├── Random Property Conditioning
-      └── Classifier-Free Dropout
-      │
-      ▼
-Tokenizer
-      │
-      ▼
-Lightning DataModule
-      │
-      ▼
-OLMo-7B + QLoRA
-      │
-      ▼
-AdamW Optimizer
-      │
-      ▼
-Cosine Learning Rate Scheduler
-      │
-      ▼
-PyTorch Lightning Trainer
-```
+- Memory allocated on all participating GPUs
+- GPU utilization on each device
+- Distributed initialization messages from PyTorch Lightning
+- Successful checkpoint generation
 
 ---
 
@@ -420,70 +209,90 @@ tensorboard --logdir logs
 
 # Checkpoints
 
-Training automatically stores model checkpoints.
+Model checkpoints are automatically stored in
 
-```
+```text
 checkpoints/
-    last.ckpt
 ```
 
-Training logs
+Example
 
-```
-logs/
-    cfg/
+```text
+checkpoints/
+└── lora_cfg_50000/
+    ├── best-epoch=01.ckpt
+    ├── best-epoch=02.ckpt
+    └── last.ckpt
 ```
 
 ---
 
-# Requirements
+# Classifier-Free Guidance (CFG)
 
-- Python 3.10+
+During training, molecular property conditioning is randomly removed with probability
+
+```yaml
+dropout_prob: 0.2
+```
+
+This enables the model to learn both conditional and unconditional molecular generation within a single model.
+
+---
+
+# Training Pipeline
+
+```text
+Dataset
+    │
+    ▼
+Random Property Dropout (CFG)
+    │
+    ▼
+Tokenizer
+    │
+    ▼
+OLMo-7B (4-bit Quantization)
+    │
+    ▼
+LoRA Adapters
+    │
+    ▼
+Loss Computation
+    │
+    ▼
+Backpropagation
+    │
+    ▼
+Checkpoint Saving
+```
+
+---
+
+# Frameworks
+
 - PyTorch
 - PyTorch Lightning
-- Transformers
+- Hugging Face Transformers
 - PEFT
 - BitsAndBytes
-- RDKit
-- pandas
-- numpy
-
----
-
-# Current Status
-
-Implemented
-
-- PyTorch Lightning training pipeline
-- QLoRA fine-tuning
-- LoRA adapters
-- Gradient checkpointing
-- Classifier-Free Guidance (CFG)
-- Random property conditioning
-- Multi-property conditioning
-- TensorBoard logging
-- Automatic checkpointing
-- YAML configuration system
+- Accelerate
 
 ---
 
 # Future Work
 
-- CFG inference with adjustable guidance scale
-- Distributed multi-GPU training
-- Additional molecular property conditioning
-- Molecule evaluation pipeline
-- Sampling utilities
-- Hugging Face model export
+- Dynamic CFG scheduling
+- Property-guided decoding
+- Additional molecular descriptors
+- Larger-scale GuacaMol training
+- Reinforcement learning fine-tuning
 
 ---
 
 # Acknowledgements
 
-This implementation builds upon:
-
-- ChemFM
-- OLMo
-- Hugging Face Transformers
-- PEFT
+- Allen Institute for AI (OLMo)
+- Hugging Face
 - PyTorch Lightning
+- PEFT
+- BitsAndBytes
