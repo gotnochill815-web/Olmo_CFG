@@ -2,7 +2,7 @@ model_name: harindhar10/OLMo-7B-fsdp-Pubchem-2.5M-1epochs-eos
 
 load_in_4bit: true
 
-device_map: auto
+device_map: null 
 
 gradient_checkpointing: true
 
