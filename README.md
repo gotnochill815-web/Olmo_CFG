@@ -18,6 +18,8 @@ Built using **PyTorch Lightning**, **Hugging Face Transformers**, **PEFT**, and 
 - Automatic checkpointing
 - TensorBoard logging
 - Distributed Data Parallel (DDP) compatible
+- dataset for 100k : https://huggingface.co/datasets/prakhya15/guacamol-cfg-100k
+- dataset for 500k : https://huggingface.co/datasets/prakhya15/guacamol-cfg-500k
 
 ---
 
