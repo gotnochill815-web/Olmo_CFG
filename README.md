@@ -164,7 +164,7 @@ torchrun --nproc_per_node=4 train.py \
     --model configs/model/olmo_7b.yaml \
     --training configs/training/default_50000.yaml
 ```
-
+this is the model trained on 50k : https://huggingface.co/prakhya15/Olmo-CFG-50000
 ---
 
 # Verifying Multi-GPU Training
