@@ -3,6 +3,9 @@ CFG Decoder
 
 Runs conditional and unconditional decoding using
 Classifier-Free Guidance.
+
+The unconditional prompt must match the training-time
+CFG dropout representation.
 """
 
 import torch
@@ -21,38 +24,44 @@ def cfg_decode(
     max_new_tokens: int = 128,
     temperature: float = 1.0,
     top_p: float = 0.95,
+    stop_newline: bool = True,
+    verbose: bool = True,
 ):
     """
-    Generate a molecule using Classifier-Free Guidance (CFG).
+    Generate one molecule using CFG.
     """
 
     model.eval()
 
     device = next(model.parameters()).device
 
-    #########################################################
-    # DEBUG
-    #########################################################
+    if verbose:
+        print("\n" + "=" * 80)
+        print("Conditional Prompt")
+        print(repr(conditional_prompt))
 
-    print("\n" + "=" * 80)
-    print("Conditional Prompt")
-    print(repr(conditional_prompt))
+        print("\n" + "=" * 80)
+        print("Unconditional Prompt")
+        print(repr(unconditional_prompt))
 
-    print("\n" + "=" * 80)
-    print("Unconditional Prompt")
-    print(repr(unconditional_prompt))
-    print("=" * 80)
-
-    #########################################################
+        print("\n" + "=" * 80)
+        print(f"CFG scale      : {guidance_scale}")
+        print(f"Temperature    : {temperature}")
+        print(f"Top-p          : {top_p}")
+        print(f"Max new tokens : {max_new_tokens}")
+        print(f"Stop newline   : {stop_newline}")
+        print("=" * 80)
 
     cond_inputs = tokenizer(
         conditional_prompt,
         return_tensors="pt",
+        clean_up_tokenization_spaces=False,
     ).to(device)
 
     uncond_inputs = tokenizer(
         unconditional_prompt,
         return_tensors="pt",
+        clean_up_tokenization_spaces=False,
     ).to(device)
 
     cond_ids = cond_inputs["input_ids"]
@@ -61,44 +70,47 @@ def cfg_decode(
     uncond_ids = uncond_inputs["input_ids"]
     uncond_mask = uncond_inputs["attention_mask"]
 
-    #########################################################
-    # DEBUG
-    #########################################################
-
-    print("\nConditional IDs:")
-    print(cond_ids)
-
-    print("\nConditional Tokens:")
-    print(tokenizer.convert_ids_to_tokens(cond_ids[0]))
-
-    print("\nUnconditional IDs:")
-    print(uncond_ids)
-
-    print("\nUnconditional Tokens:")
-    print(tokenizer.convert_ids_to_tokens(uncond_ids[0]))
-
-    #########################################################
-
     prompt_len = cond_ids.shape[1]
 
     eos_id = tokenizer.eos_token_id
 
-    print("\nEOS ID:", eos_id)
+    newline_ids = set(
+        tokenizer.encode(
+            "\n",
+            add_special_tokens=False,
+        )
+    )
+
+    if verbose:
+        print("\nConditional IDs:")
+        print(cond_ids)
+
+        print("\nConditional Tokens:")
+        print(
+            tokenizer.convert_ids_to_tokens(
+                cond_ids[0]
+            )
+        )
+
+        print("\nUnconditional IDs:")
+        print(uncond_ids)
+
+        print("\nUnconditional Tokens:")
+        print(
+            tokenizer.convert_ids_to_tokens(
+                uncond_ids[0]
+            )
+        )
+
+        print("\nEOS ID:", eos_id)
+        print("Newline IDs:", sorted(newline_ids))
 
     for step in range(max_new_tokens):
-
-        #########################################################
-        # Conditional
-        #########################################################
 
         cond_outputs = model(
             input_ids=cond_ids,
             attention_mask=cond_mask,
         )
-
-        #########################################################
-        # Unconditional
-        #########################################################
 
         uncond_outputs = model(
             input_ids=uncond_ids,
@@ -114,20 +126,31 @@ def cfg_decode(
             guidance_scale=guidance_scale,
         )
 
-        if temperature != 1.0:
-            guided_logits = guided_logits / temperature
+        if temperature <= 0:
+            raise ValueError("temperature must be > 0")
 
-        probs = F.softmax(guided_logits, dim=-1)
+        guided_logits = guided_logits / temperature
 
-        #########################################################
-        # Top-p sampling
-        #########################################################
+        probs = F.softmax(
+            guided_logits,
+            dim=-1,
+        )
+
+        if torch.isnan(probs).any():
+            raise RuntimeError(
+                "NaN detected in sampling probabilities."
+            )
+
+        # --------------------------------------------------------
+        # TOP-P
+        # --------------------------------------------------------
 
         if top_p < 1.0:
 
             sorted_probs, sorted_indices = torch.sort(
                 probs,
                 descending=True,
+                dim=-1,
             )
 
             cumulative_probs = torch.cumsum(
@@ -136,14 +159,24 @@ def cfg_decode(
             )
 
             sorted_mask = cumulative_probs > top_p
-            sorted_mask[..., 1:] = sorted_mask[..., :-1].clone()
+
+            sorted_mask[..., 1:] = (
+                sorted_mask[..., :-1].clone()
+            )
+
             sorted_mask[..., 0] = False
 
-            sorted_probs[sorted_mask] = 0.0
+            sorted_probs = sorted_probs.masked_fill(
+                sorted_mask,
+                0.0,
+            )
 
-            sorted_probs = sorted_probs / sorted_probs.sum(
-                dim=-1,
-                keepdim=True,
+            sorted_probs = (
+                sorted_probs
+                / sorted_probs.sum(
+                    dim=-1,
+                    keepdim=True,
+                ).clamp_min(1e-12)
             )
 
             sampled = torch.multinomial(
@@ -163,22 +196,51 @@ def cfg_decode(
                 num_samples=1,
             )
 
-        #########################################################
-        # DEBUG
-        #########################################################
+        token_id = next_token.item()
 
-        token_text = tokenizer.decode(
-            next_token[0],
-            skip_special_tokens=False,
-        )
+        if verbose:
+            token_text = tokenizer.decode(
+                [token_id],
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
+            )
 
-        print(
-            f"Step {step:03d} | "
-            f"ID={next_token.item()} | "
-            f"Token={repr(token_text)}"
-        )
+            print(
+                f"Step {step:03d} | "
+                f"ID={token_id} | "
+                f"Token={repr(token_text)}"
+            )
 
-        #########################################################
+        # --------------------------------------------------------
+        # STOP ON EOS
+        # --------------------------------------------------------
+
+        if (
+            eos_id is not None
+            and token_id == eos_id
+        ):
+            if verbose:
+                print("\nReached EOS.")
+            break
+
+        # --------------------------------------------------------
+        # STOP ON NEWLINE
+        # --------------------------------------------------------
+
+        if (
+            stop_newline
+            and token_id in newline_ids
+        ):
+            if verbose:
+                print(
+                    "\nReached newline. "
+                    "Stopping after first molecule."
+                )
+            break
+
+        # --------------------------------------------------------
+        # APPEND SAME GENERATED TOKEN TO BOTH BRANCHES
+        # --------------------------------------------------------
 
         cond_ids = torch.cat(
             [cond_ids, next_token],
@@ -214,36 +276,41 @@ def cfg_decode(
             dim=1,
         )
 
-        if next_token.item() == eos_id:
-            print("\nReached EOS.")
-            break
-
-    #########################################################
-    # Decode
-    #########################################################
+    # ------------------------------------------------------------
+    # DECODE GENERATED TOKENS
+    # ------------------------------------------------------------
 
     generated_ids = cond_ids[0][prompt_len:]
 
-    print("\nGenerated IDs:")
-    print(generated_ids.tolist())
+    if verbose:
+        print("\nGenerated IDs:")
+        print(generated_ids.tolist())
 
     raw_output = tokenizer.decode(
         generated_ids,
         skip_special_tokens=False,
+        clean_up_tokenization_spaces=False,
     )
 
-    print("\nRaw Decoded Output:")
-    print(repr(raw_output))
+    if verbose:
+        print("\nRaw Decoded Output:")
+        print(repr(raw_output))
 
     generated = raw_output
 
     if tokenizer.eos_token is not None:
-        generated = generated.split(tokenizer.eos_token)[0]
+        generated = generated.split(
+            tokenizer.eos_token
+        )[0]
+
+    if stop_newline:
+        generated = generated.split("\n")[0]
 
     generated = generated.strip()
 
-    print("\nFinal Output:")
-    print(repr(generated))
-    print("=" * 80)
+    if verbose:
+        print("\nFinal Output:")
+        print(repr(generated))
+        print("=" * 80)
 
     return generated
