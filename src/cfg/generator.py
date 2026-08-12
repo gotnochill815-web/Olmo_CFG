@@ -1,9 +1,15 @@
 """
 Generator for Classifier-Free Guidance (CFG).
+
+The unconditional prompt is training-aligned with the
+50K model's CFG dropout implementation:
+
+    <pstart>
+    <molstart>
 """
 
 from src.cfg.decoder import cfg_decode
-from src.cfg.prompt_builder import build_prompt
+from src.generation.prompt_builder import build_prompt
 
 
 def generate_molecule(
@@ -17,12 +23,13 @@ def generate_molecule(
     temperature=1.0,
     top_p=0.95,
     max_new_tokens=128,
+    stop_newline=True,
+    verbose=False,
 ):
     """
-    Generate a single molecule using Classifier-Free Guidance (CFG).
+    Generate one molecule using classifier-free guidance.
     """
 
-    # Conditional prompt
     conditional_prompt = build_prompt(
         qed=qed,
         logp=logp,
@@ -30,18 +37,24 @@ def generate_molecule(
         sas=sas,
     )
 
-    # Unconditional prompt
-    unconditional_prompt = build_prompt()
-
+    # IMPORTANT:
+    # build_prompt() with no properties gives exactly the
+    # unconditional format used during training dropout:
+    #
+    # <pstart>
+    # <molstart>
+    #
     smiles = cfg_decode(
         model=model,
         tokenizer=tokenizer,
         conditional_prompt=conditional_prompt,
-        unconditional_prompt=unconditional_prompt,
+        unconditional_prompt=build_prompt(),
         guidance_scale=guidance_scale,
         temperature=temperature,
         top_p=top_p,
         max_new_tokens=max_new_tokens,
+        stop_newline=stop_newline,
+        verbose=verbose,
     )
 
     return smiles
@@ -59,6 +72,7 @@ def generate_multiple(
     temperature=1.0,
     top_p=0.95,
     max_new_tokens=128,
+    stop_newline=True,
     verbose=False,
 ):
     """
@@ -67,33 +81,74 @@ def generate_multiple(
 
     molecules = []
 
-    print("=" * 60)
+    print("=" * 70)
+    print("CFG MULTIPLE GENERATION")
+    print("=" * 70)
+
     print(f"Samples         : {n_samples}")
     print(f"Guidance Scale  : {guidance_scale}")
+    print(f"Temperature     : {temperature}")
+    print(f"Top-p           : {top_p}")
+    print(f"Max New Tokens  : {max_new_tokens}")
+    print(f"Stop Newline    : {stop_newline}")
+
+    print("\nTarget properties:")
     print(f"QED             : {qed}")
-    print(f"LOGP            : {logp}")
+    print(f"LogP            : {logp}")
     print(f"TPSA            : {tpsa}")
     print(f"SAS             : {sas}")
-    print("=" * 60)
+
+    print("\nTraining-aligned unconditional prompt:")
+    print(repr(build_prompt()))
+
+    print("=" * 70)
 
     for i in range(n_samples):
 
-        smiles = generate_molecule(
-            model=model,
-            tokenizer=tokenizer,
-            qed=qed,
-            logp=logp,
-            tpsa=tpsa,
-            sas=sas,
-            guidance_scale=guidance_scale,
-            temperature=temperature,
-            top_p=top_p,
-            max_new_tokens=max_new_tokens,
-        )
+        try:
+            smiles = generate_molecule(
+                model=model,
+                tokenizer=tokenizer,
+                qed=qed,
+                logp=logp,
+                tpsa=tpsa,
+                sas=sas,
+                guidance_scale=guidance_scale,
+                temperature=temperature,
+                top_p=top_p,
+                max_new_tokens=max_new_tokens,
+                stop_newline=stop_newline,
+                verbose=verbose,
+            )
 
-        molecules.append(smiles)
+            molecules.append(smiles)
 
-        if verbose:
-            print(f"[{i+1:03d}] {smiles}")
+            if verbose:
+                print(
+                    f"[{i + 1:03d}/{n_samples:03d}] "
+                    f"{smiles}"
+                )
+
+        except Exception as e:
+            print(
+                f"[{i + 1:03d}/{n_samples:03d}] "
+                f"GENERATION ERROR: "
+                f"{type(e).__name__}: {e}"
+            )
+            molecules.append(None)
+
+    successful = sum(
+        x is not None
+        for x in molecules
+    )
+
+    print("\n" + "=" * 70)
+    print("GENERATION COMPLETE")
+    print("=" * 70)
+    print(
+        f"Successful generations: "
+        f"{successful}/{n_samples}"
+    )
+    print("=" * 70)
 
     return molecules
