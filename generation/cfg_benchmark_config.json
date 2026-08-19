@@ -1,0 +1,32 @@
+
+{
+  "properties": {
+    "qed": {
+      "sample_points": [
+        0.5
+      ],
+      "num_samples": 20,
+      "temperatures": [
+        1.0,
+        1.2,
+        1.5
+      ],
+      "top_p": 0.95,
+      "max_new_tokens": 128,
+      "means": [
+        0.5559003125710424
+      ],
+      "stds": [
+        0.21339854620824716
+      ]
+    }
+  },
+  "cfg": {
+    "guidance_scales": [
+      1.5,
+      2.0,
+      2.5
+    ],
+    "unconditional_prompt": "training_aligned"
+  }
+}

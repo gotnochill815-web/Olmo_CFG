@@ -1,0 +1,31 @@
+{
+    "properties": {
+        "SAS": {
+            "sample_points": [
+                2.0,
+                3.0,
+                4.0
+            ],
+            "num_samples": 10000,
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "max_new_tokens": 128,
+            "means": [
+                2.889429694406497
+            ],
+            "stds": [
+                0.8081188219568571
+            ]
+        }
+    },
+    "cfg": {
+        "guidance_scales": [
+            0.5,
+            1.0,
+            2.0,
+            3.0,
+            5.0
+        ],
+        "unconditional_prompt": "training_aligned"
+    }
+}
